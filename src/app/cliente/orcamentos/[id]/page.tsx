@@ -10,9 +10,11 @@ import { useRouter } from "next/navigation";
 
 import {
   aceitarOrcamento,
+  aceitarOrcamentoEvento,
   buscarOrcamentoClientePorId,
   OrcamentoCliente,
   recusarOrcamento,
+  recusarOrcamentoEvento,
 } from "@/controllers/orcamentoController";
 
 export default function DetalhesOrcamentoClientePage({
@@ -33,12 +35,17 @@ export default function DetalhesOrcamentoClientePage({
   const [processando, setProcessando] =
     useState(false);
 
-  const [erro, setErro] = useState("");
+  const [erro, setErro] =
+    useState("");
 
   const [confirmacao, setConfirmacao] =
     useState<"aceitar" | "recusar" | null>(
       null
     );
+
+  /* =========================================================
+     CARREGAR ORÇAMENTO
+  ========================================================= */
 
   useEffect(() => {
     async function carregar() {
@@ -76,6 +83,10 @@ export default function DetalhesOrcamentoClientePage({
     carregar();
   }, [id]);
 
+  /* =========================================================
+     ACEITAR / RECUSAR
+  ========================================================= */
+
   async function confirmarDecisao() {
     if (!orcamento || !confirmacao) {
       return;
@@ -85,10 +96,21 @@ export default function DetalhesOrcamentoClientePage({
       setProcessando(true);
       setErro("");
 
+      const ehEvento =
+        orcamento.origem === "evento";
+
+      /* ACEITAR */
+
       if (confirmacao === "aceitar") {
-        await aceitarOrcamento(
-          orcamento.id
-        );
+        if (ehEvento) {
+          await aceitarOrcamentoEvento(
+            orcamento.id
+          );
+        } else {
+          await aceitarOrcamento(
+            orcamento.id
+          );
+        }
 
         setOrcamento({
           ...orcamento,
@@ -96,10 +118,18 @@ export default function DetalhesOrcamentoClientePage({
         });
       }
 
+      /* RECUSAR */
+
       if (confirmacao === "recusar") {
-        await recusarOrcamento(
-          orcamento.id
-        );
+        if (ehEvento) {
+          await recusarOrcamentoEvento(
+            orcamento.id
+          );
+        } else {
+          await recusarOrcamento(
+            orcamento.id
+          );
+        }
 
         setOrcamento({
           ...orcamento,
@@ -121,14 +151,25 @@ export default function DetalhesOrcamentoClientePage({
     }
   }
 
+  /* =========================================================
+     CARREGANDO
+  ========================================================= */
+
   if (carregando) {
     return (
       <div className="cliente-orcamento-estado">
         <span>✦</span>
-        <p>Carregando proposta...</p>
+
+        <p>
+          Carregando proposta...
+        </p>
       </div>
     );
   }
+
+  /* =========================================================
+     NÃO ENCONTRADO
+  ========================================================= */
 
   if (!orcamento) {
     return (
@@ -154,30 +195,46 @@ export default function DetalhesOrcamentoClientePage({
     );
   }
 
+  /* =========================================================
+     DADOS
+  ========================================================= */
+
+  const ehEvento =
+    orcamento.origem === "evento";
+
   const valor =
-    new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(
+    new Intl.NumberFormat(
+      "pt-BR",
+      {
+        style: "currency",
+        currency: "BRL",
+      }
+    ).format(
       Number(orcamento.valor)
     );
 
   const dataCriacao =
-    new Intl.DateTimeFormat("pt-BR", {
-      dateStyle: "long",
-    }).format(
-      new Date(orcamento.criado_em)
+    new Intl.DateTimeFormat(
+      "pt-BR",
+      {
+        dateStyle: "long",
+      }
+    ).format(
+      new Date(
+        orcamento.criado_em
+      )
     );
 
-  const validade = orcamento.validade
-    ? new Intl.DateTimeFormat(
-        "pt-BR"
-      ).format(
-        new Date(
-          `${orcamento.validade}T12:00:00`
+  const validade =
+    orcamento.validade
+      ? new Intl.DateTimeFormat(
+          "pt-BR"
+        ).format(
+          new Date(
+            `${orcamento.validade}T12:00:00`
+          )
         )
-      )
-    : "Sem data definida";
+      : "Sem data definida";
 
   const profissional =
     orcamento.profissionais
@@ -188,8 +245,18 @@ export default function DetalhesOrcamentoClientePage({
     orcamento.servicos?.nome ||
     "Serviço";
 
+  const evento =
+    orcamento.eventos;
+
+  /* =========================================================
+     PÁGINA
+  ========================================================= */
+
   return (
     <div className="cliente-proposta-page">
+
+      {/* VOLTAR */}
+
       <button
         className="cliente-proposta-voltar"
         onClick={() =>
@@ -202,20 +269,34 @@ export default function DetalhesOrcamentoClientePage({
       </button>
 
       <div className="cliente-proposta-grid">
+
+        {/* ===================================================
+            CONTEÚDO PRINCIPAL
+        =================================================== */}
+
         <section className="cliente-proposta-principal">
+
+          {/* CABEÇALHO */}
+
           <div className="cliente-proposta-cabecalho">
             <div>
               <span className="dashboard-label">
-                PROPOSTA COMERCIAL
+                {ehEvento
+                  ? "PROPOSTA PARA EVENTO"
+                  : "PROPOSTA COMERCIAL"}
               </span>
 
               <h1>
                 {orcamento.titulo ||
-                  "Proposta para seu evento"}
+                  (ehEvento
+                    ? evento?.nome
+                    : servico) ||
+                  "Proposta comercial"}
               </h1>
 
               <p>
                 Enviada por{" "}
+
                 <strong>
                   {profissional}
                 </strong>
@@ -223,41 +304,146 @@ export default function DetalhesOrcamentoClientePage({
             </div>
 
             <StatusProposta
-              status={orcamento.status}
+              status={
+                orcamento.status
+              }
             />
           </div>
 
           <div className="cliente-proposta-divisor" />
 
+          {/* =================================================
+              ORIGEM: EVENTO OU SERVIÇO
+          ================================================= */}
+
           <div className="cliente-proposta-servico">
-            <span>Serviço</span>
 
-            <strong>{servico}</strong>
+            <span>
+              {ehEvento
+                ? "Evento"
+                : "Serviço"}
+            </span>
 
-            {orcamento.servicos
-              ?.categorias_servico
-              ?.nome && (
-              <small>
-                {
-                  orcamento.servicos
-                    .categorias_servico
-                    .nome
-                }
-              </small>
+            {/* EVENTO */}
+
+            {ehEvento ? (
+              <>
+                <strong>
+                  {evento?.nome ||
+                    "Evento"}
+                </strong>
+
+                {evento?.tipo_evento && (
+                  <small>
+                    {evento.tipo_evento}
+                  </small>
+                )}
+
+                {evento?.tema && (
+                  <small>
+                    Tema: {evento.tema}
+                  </small>
+                )}
+
+                {evento && (
+                  <div className="cliente-proposta-evento-detalhes">
+
+                    <div className="cliente-proposta-evento-meta">
+
+                      {evento.data_evento && (
+                        <span>
+                          Data:{" "}
+                          {formatarDataEvento(
+                            evento.data_evento
+                          )}
+                        </span>
+                      )}
+
+                      {evento.horario && (
+                        <span>
+                          Horário:{" "}
+                          {evento.horario.slice(
+                            0,
+                            5
+                          )}
+                        </span>
+                      )}
+
+                      {evento.cidade && (
+                        <span>
+                          Local:{" "}
+                          {evento.cidade}
+
+                          {evento.estado
+                            ? ` - ${evento.estado}`
+                            : ""}
+                        </span>
+                      )}
+
+                    </div>
+
+                    <button
+                      type="button"
+                      className="cliente-proposta-ver-evento"
+                      onClick={() =>
+                        router.push(
+                          `/cliente/eventos/${evento.id}`
+                        )
+                      }
+                    >
+                      Ver meu evento →
+                    </button>
+
+                  </div>
+                )}
+              </>
+            ) : (
+              /* SERVIÇO */
+
+              <>
+                <strong>
+                  {servico}
+                </strong>
+
+                {orcamento.servicos
+                  ?.categorias_servico
+                  ?.nome && (
+                  <small>
+                    {
+                      orcamento.servicos
+                        .categorias_servico
+                        .nome
+                    }
+                  </small>
+                )}
+              </>
             )}
+
           </div>
 
           <div className="cliente-proposta-divisor" />
 
-          <h2>Sobre a proposta</h2>
+          {/* =================================================
+              DESCRIÇÃO
+          ================================================= */}
+
+          <h2>
+            Sobre a proposta
+          </h2>
 
           <div className="cliente-proposta-descricao">
-            {orcamento.descricao}
+            {orcamento.descricao ||
+              "O profissional não adicionou uma descrição."}
           </div>
 
           <div className="cliente-proposta-divisor" />
 
+          {/* =================================================
+              INFORMAÇÕES
+          ================================================= */}
+
           <div className="cliente-proposta-infos">
+
             <InfoProposta
               titulo="Enviada em"
               valor={dataCriacao}
@@ -271,30 +457,42 @@ export default function DetalhesOrcamentoClientePage({
             <InfoProposta
               titulo="Origem"
               valor={
-                orcamento.origem ===
-                "interesse"
-                  ? "Interesse em serviço"
-                  : "Evento"
+                ehEvento
+                  ? "Proposta para evento"
+                  : "Interesse em serviço"
               }
             />
+
           </div>
         </section>
 
+        {/* ===================================================
+            LATERAL
+        =================================================== */}
+
         <aside className="cliente-proposta-lateral">
+
+          {/* VALOR */}
+
           <div className="cliente-proposta-valor">
+
             <span>
               VALOR DA PROPOSTA
             </span>
 
-            <strong>{valor}</strong>
+            <strong>
+              {valor}
+            </strong>
+
+            {/* PENDENTE */}
 
             {orcamento.status ===
               "pendente" && (
               <>
                 <p>
-                  Analise as informações da
-                  proposta antes de tomar sua
-                  decisão.
+                  Analise as informações
+                  da proposta antes de
+                  tomar sua decisão.
                 </p>
 
                 <button
@@ -321,9 +519,12 @@ export default function DetalhesOrcamentoClientePage({
               </>
             )}
 
+            {/* ACEITO */}
+
             {orcamento.status ===
               "aceito" && (
               <div className="cliente-decisao cliente-decisao-aceito">
+
                 <span>✓</span>
 
                 <div>
@@ -332,16 +533,21 @@ export default function DetalhesOrcamentoClientePage({
                   </strong>
 
                   <p>
-                    Você aceitou este
-                    orçamento.
+                    {ehEvento
+                      ? "Você aceitou esta proposta e o evento foi confirmado."
+                      : "Você aceitou este orçamento."}
                   </p>
                 </div>
+
               </div>
             )}
+
+            {/* RECUSADO */}
 
             {orcamento.status ===
               "recusado" && (
               <div className="cliente-decisao">
+
                 <span>×</span>
 
                 <div>
@@ -354,12 +560,16 @@ export default function DetalhesOrcamentoClientePage({
                     orçamento.
                   </p>
                 </div>
+
               </div>
             )}
+
+            {/* CANCELADO */}
 
             {orcamento.status ===
               "cancelado" && (
               <div className="cliente-decisao">
+
                 <span>×</span>
 
                 <div>
@@ -372,12 +582,16 @@ export default function DetalhesOrcamentoClientePage({
                     cancelada.
                   </p>
                 </div>
+
               </div>
             )}
+
+            {/* EXPIRADO */}
 
             {orcamento.status ===
               "expirado" && (
               <div className="cliente-decisao">
+
                 <span>!</span>
 
                 <div>
@@ -390,11 +604,18 @@ export default function DetalhesOrcamentoClientePage({
                     terminou.
                   </p>
                 </div>
+
               </div>
             )}
+
           </div>
 
+          {/* =================================================
+              PROFISSIONAL
+          ================================================= */}
+
           <div className="cliente-proposta-profissional">
+
             <span className="dashboard-label">
               PROFISSIONAL
             </span>
@@ -407,9 +628,15 @@ export default function DetalhesOrcamentoClientePage({
                 <span> ✓</span>
               )}
             </h3>
+
           </div>
+
         </aside>
       </div>
+
+      {/* =====================================================
+          ERRO
+      ===================================================== */}
 
       {erro && (
         <div className="cliente-proposta-erro">
@@ -417,20 +644,26 @@ export default function DetalhesOrcamentoClientePage({
         </div>
       )}
 
+      {/* =====================================================
+          MODAL DE CONFIRMAÇÃO
+      ===================================================== */}
+
       {confirmacao && (
         <div
           className="cliente-confirmacao-overlay"
           onMouseDown={(event) => {
             if (
               event.target ===
-              event.currentTarget &&
+                event.currentTarget &&
               !processando
             ) {
               setConfirmacao(null);
             }
           }}
         >
+
           <div className="cliente-confirmacao-modal">
+
             <span className="dashboard-label">
               CONFIRMAÇÃO
             </span>
@@ -443,11 +676,14 @@ export default function DetalhesOrcamentoClientePage({
 
             <p>
               {confirmacao === "aceitar"
-                ? `Você está prestes a aceitar a proposta de ${valor} enviada por ${profissional}.`
+                ? ehEvento
+                  ? `Você está prestes a aceitar a proposta de ${valor} enviada por ${profissional} para o evento "${evento?.nome || "Evento"}". O evento será confirmado e deixará de aparecer nas oportunidades.`
+                  : `Você está prestes a aceitar a proposta de ${valor} enviada por ${profissional}.`
                 : "Após confirmar, esta proposta será marcada como recusada."}
             </p>
 
             <div className="cliente-confirmacao-acoes">
+
               <button
                 type="button"
                 onClick={() =>
@@ -474,17 +710,23 @@ export default function DetalhesOrcamentoClientePage({
                 {processando
                   ? "Processando..."
                   : confirmacao ===
-                      "aceitar"
+                    "aceitar"
                     ? "Sim, aceitar"
                     : "Sim, recusar"}
               </button>
+
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }
+
+/* =========================================================
+   INFORMAÇÃO
+========================================================= */
 
 function InfoProposta({
   titulo,
@@ -501,17 +743,50 @@ function InfoProposta({
   );
 }
 
+/* =========================================================
+   FORMATAR DATA DO EVENTO
+========================================================= */
+
+function formatarDataEvento(
+  data: string
+) {
+  return new Intl.DateTimeFormat(
+    "pt-BR",
+    {
+      dateStyle: "long",
+    }
+  ).format(
+    new Date(
+      `${data}T12:00:00`
+    )
+  );
+}
+
+/* =========================================================
+   STATUS
+========================================================= */
+
 function StatusProposta({
   status,
 }: {
-  status: OrcamentoCliente["status"];
+  status:
+    OrcamentoCliente["status"];
 }) {
   const nomes = {
-    pendente: "Aguardando decisão",
-    aceito: "Aceito",
-    recusado: "Recusado",
-    cancelado: "Cancelado",
-    expirado: "Expirado",
+    pendente:
+      "Aguardando decisão",
+
+    aceito:
+      "Aceito",
+
+    recusado:
+      "Recusado",
+
+    cancelado:
+      "Cancelado",
+
+    expirado:
+      "Expirado",
   };
 
   return (

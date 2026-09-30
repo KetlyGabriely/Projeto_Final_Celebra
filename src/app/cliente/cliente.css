@@ -4128,3 +4128,362 @@ button {
     width: 100%;
   }
 }
+/* =========================================================
+   FILTRO POR ORIGEM DO ORÇAMENTO
+========================================================= */
+
+.cliente-orcamentos-origens {
+  margin-bottom: 10px;
+  padding: 8px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+
+  border: 1px solid #222;
+  border-radius: 6px;
+
+  background: #0d0d0d;
+}
+
+.cliente-orcamentos-origens > span {
+  margin: 0 7px;
+
+  color: #555;
+
+  font-size: 7px;
+
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.cliente-orcamentos-origens button {
+  padding: 8px 13px;
+
+  border: 1px solid transparent;
+  border-radius: 5px;
+
+  background: transparent;
+
+  color: #666;
+
+  cursor: pointer;
+
+  font-size: 8px;
+
+  transition: 0.2s;
+}
+
+.cliente-orcamentos-origens button:hover {
+  color: #aaa;
+}
+
+.cliente-orcamentos-origens button.ativo {
+  border-color:
+    rgba(213, 169, 66, 0.25);
+
+  background:
+    rgba(213, 169, 66, 0.06);
+
+  color: #d0a142;
+}
+
+/* =========================================================
+   ORIGEM DO CARD
+========================================================= */
+
+.cliente-orcamento-origem {
+  margin: 8px 0 10px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+}
+
+.cliente-orcamento-origem > span {
+  padding: 4px 7px;
+
+  border-radius: 4px;
+
+  font-size: 6px;
+  font-weight: 700;
+
+  letter-spacing: 1px;
+}
+
+.cliente-orcamento-origem > strong {
+  color: #777;
+
+  font-size: 8px;
+  font-weight: 400;
+}
+
+.cliente-origem-evento {
+  border: 1px solid
+    rgba(213, 169, 66, 0.25);
+
+  background:
+    rgba(213, 169, 66, 0.06);
+
+  color: #c99c3f;
+}
+
+.cliente-origem-servico {
+  border: 1px solid
+    rgba(100, 130, 170, 0.22);
+
+  background:
+    rgba(100, 130, 170, 0.05);
+
+  color: #879cb8;
+}
+
+/* =========================================================
+   INFORMAÇÕES DO EVENTO
+========================================================= */
+
+.cliente-orcamento-evento-info {
+  margin: 11px 0;
+
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 7px;
+}
+
+.cliente-orcamento-evento-info span {
+  padding: 6px 9px;
+
+  border: 1px solid #242424;
+  border-radius: 4px;
+
+  background: #0b0b0b;
+
+  color: #626262;
+
+  font-size: 7px;
+}
+
+/* =========================================================
+   RESPONSIVO
+========================================================= */
+
+@media (max-width: 600px) {
+  .cliente-orcamentos-origens {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cliente-orcamentos-origens > span {
+    margin-bottom: 3px;
+  }
+
+  .cliente-orcamentos-origens button {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+/* =========================================================
+   SERVIÇOS DO NOVO EVENTO
+========================================================= */
+
+.novo-evento-servicos-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 10px;
+}
+
+.novo-evento-servico-card {
+  padding: 15px;
+
+  border: 1px solid #242424;
+  border-radius: 7px;
+
+  background: #0c0c0c;
+
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.novo-evento-servico-card.selecionado {
+  border-color:
+    rgba(213, 169, 66, 0.35);
+
+  background:
+    rgba(213, 169, 66, 0.025);
+}
+
+.novo-evento-servico-check {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  cursor: pointer;
+}
+
+.novo-evento-servico-check input {
+  width: 15px;
+  height: 15px;
+
+  accent-color: #d3a442;
+}
+
+.novo-evento-servico-identidade {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+}
+
+.novo-evento-servico-identidade strong {
+  color: #b9b3aa;
+
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.novo-evento-servico-icone {
+  width: 30px;
+  height: 30px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid #292929;
+  border-radius: 5px;
+
+  color: #c99c3f;
+
+  font-size: 13px;
+}
+
+/* ORÇAMENTO DA CATEGORIA */
+
+.novo-evento-servico-orcamento {
+  margin-top: 14px;
+  padding-top: 12px;
+
+  border-top: 1px solid #202020;
+}
+
+.novo-evento-servico-orcamento > span {
+  display: block;
+
+  margin-bottom: 7px;
+
+  color: #555;
+
+  font-size: 7px;
+
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+/* =========================================================
+   RESUMO DO ORÇAMENTO
+========================================================= */
+
+.novo-evento-orcamento-resumo {
+  margin-top: 18px;
+
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 8px;
+}
+
+.novo-evento-orcamento-item {
+  padding: 14px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 5px;
+
+  border: 1px solid #242424;
+  border-radius: 6px;
+
+  background: #0b0b0b;
+}
+
+.novo-evento-orcamento-item span {
+  color: #555;
+
+  font-size: 7px;
+
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.novo-evento-orcamento-item strong {
+  color: #aaa49c;
+
+  font-family: Georgia, serif;
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.novo-evento-orcamento-positivo strong {
+  color: #c99c3f;
+}
+
+.novo-evento-orcamento-erro {
+  border-color:
+    rgba(180, 80, 80, 0.35);
+}
+
+.novo-evento-orcamento-erro strong {
+  color: #b86f6f;
+}
+
+.novo-evento-orcamento-alerta {
+  margin-top: 8px;
+  padding: 10px 12px;
+
+  border: 1px solid
+    rgba(180, 80, 80, 0.25);
+
+  border-radius: 5px;
+
+  background:
+    rgba(180, 80, 80, 0.04);
+
+  color: #a96b6b;
+
+  font-size: 8px;
+}
+
+/* ESTADOS */
+
+.novo-evento-servicos-carregando,
+.novo-evento-servicos-vazio {
+  padding: 25px;
+
+  border: 1px dashed #292929;
+  border-radius: 6px;
+
+  color: #555;
+
+  text-align: center;
+  font-size: 9px;
+}
+
+/* RESPONSIVO */
+
+@media (max-width: 700px) {
+  .novo-evento-servicos-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .novo-evento-orcamento-resumo {
+    grid-template-columns: 1fr;
+  }
+}

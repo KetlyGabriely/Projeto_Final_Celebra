@@ -3477,3 +3477,270 @@ button {
     width: 100%;
   }
 }
+/* =========================================================
+   SERVIÇOS PROCURADOS NO EVENTO
+========================================================= */
+
+.prof-evento-servicos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prof-evento-servico-card {
+  padding: 16px;
+
+  border: 1px solid #242424;
+  border-radius: 7px;
+
+  background: #0b0b0b;
+}
+
+.prof-evento-servico-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+
+  gap: 15px;
+}
+
+.prof-evento-servico-identidade {
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+}
+
+.prof-evento-servico-icone {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid
+    rgba(213, 169, 66, 0.25);
+
+  border-radius: 6px;
+
+  background:
+    rgba(213, 169, 66, 0.03);
+
+  color: #c99c3f;
+
+  font-size: 15px;
+}
+
+.prof-evento-servico-identidade div > span,
+.prof-evento-servico-rodape div > span {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #555;
+
+  font-size: 7px;
+
+  letter-spacing: 0.8px;
+}
+
+.prof-evento-servico-identidade h3 {
+  margin: 0;
+
+  color: #c8c2b9;
+
+  font-family: Georgia, serif;
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.prof-evento-servico-status {
+  color: #759b73;
+
+  font-size: 7px;
+
+  white-space: nowrap;
+}
+
+.prof-evento-servico-observacoes {
+  margin: 13px 0 0;
+
+  color: #666;
+
+  font-size: 9px;
+  line-height: 1.7;
+}
+
+.prof-evento-servico-rodape {
+  margin-top: 15px;
+  padding-top: 13px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+
+  gap: 15px;
+
+  border-top: 1px solid #202020;
+}
+
+.prof-evento-servico-rodape strong {
+  color: #d1a744;
+
+  font-family: Georgia, serif;
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.prof-evento-servico-rodape button {
+  padding: 9px 13px;
+
+  border: 1px solid
+    rgba(213, 169, 66, 0.3);
+
+  border-radius: 5px;
+
+  background:
+    rgba(213, 169, 66, 0.05);
+
+  color: #c99c3f;
+
+  cursor: pointer;
+
+  font-size: 8px;
+}
+
+.prof-evento-servico-rodape button:hover {
+  background:
+    rgba(213, 169, 66, 0.1);
+}
+
+/* VAZIO */
+
+.prof-evento-servicos-vazio {
+  padding: 25px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 7px;
+
+  border: 1px dashed #292929;
+  border-radius: 6px;
+
+  text-align: center;
+}
+
+.prof-evento-servicos-vazio > span {
+  color: #c99c3f;
+  font-size: 18px;
+}
+
+.prof-evento-servicos-vazio strong {
+  color: #aaa49c;
+  font-size: 10px;
+}
+
+.prof-evento-servicos-vazio p {
+  margin: 0;
+
+  color: #555;
+
+  font-size: 8px;
+}
+
+/* RESPONSIVO */
+
+@media (max-width: 700px) {
+  .prof-evento-servico-topo,
+  .prof-evento-servico-rodape {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .prof-evento-servico-status {
+    white-space: normal;
+  }
+
+  .prof-evento-servico-rodape button {
+    width: 100%;
+  }
+}
+/* =========================================================
+   CATEGORIA DA PROPOSTA
+========================================================= */
+
+.prof-proposta-categoria {
+  margin-top: 20px;
+  padding: 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  border: 1px solid
+    rgba(213, 169, 66, 0.25);
+
+  border-radius: 7px;
+
+  background:
+    rgba(213, 169, 66, 0.035);
+}
+
+.prof-proposta-categoria > span {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid #292929;
+  border-radius: 6px;
+
+  color: #d3a942;
+}
+
+.prof-proposta-categoria div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prof-proposta-categoria small {
+  color: #555;
+
+  font-size: 7px;
+  letter-spacing: 0.8px;
+}
+
+.prof-proposta-categoria strong {
+  color: #c9c3ba;
+
+  font-family: Georgia, serif;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.prof-proposta-orcamento-total {
+  margin-top: 8px;
+  padding-top: 10px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  border-top: 1px solid #222;
+}
+
+.prof-proposta-orcamento-total span {
+  color: #555;
+  font-size: 8px;
+}
+
+.prof-proposta-orcamento-total strong {
+  color: #777;
+
+  font-size: 10px;
+  font-weight: 500;
+}

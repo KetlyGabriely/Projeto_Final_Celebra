@@ -2,17 +2,31 @@
 
 import {
   FormEvent,
+  useEffect,
+  useMemo,
   useState,
 } from "react";
 
 import { useRouter } from "next/navigation";
 
 import {
+  CategoriaEvento,
   criarEvento,
+  criarServicosEvento,
+  listarCategoriasEvento,
 } from "@/controllers/eventoController";
+
+type ServicoSelecionado = {
+  categoria_id: string;
+  orcamento: string;
+};
 
 export default function NovoEventoPage() {
   const router = useRouter();
+
+  /* =======================================================
+     EVENTO
+  ======================================================= */
 
   const [nome, setNome] =
     useState("");
@@ -50,11 +64,184 @@ export default function NovoEventoPage() {
   const [publicar, setPublicar] =
     useState(true);
 
+  /* =======================================================
+     CATEGORIAS
+  ======================================================= */
+
+  const [categorias, setCategorias] =
+    useState<CategoriaEvento[]>([]);
+
+  const [
+    servicosSelecionados,
+    setServicosSelecionados,
+  ] = useState<ServicoSelecionado[]>([]);
+
+  const [
+    carregandoCategorias,
+    setCarregandoCategorias,
+  ] = useState(true);
+
+  /* =======================================================
+     ESTADO
+  ======================================================= */
+
   const [enviando, setEnviando] =
     useState(false);
 
   const [erro, setErro] =
     useState("");
+
+  /* =======================================================
+     CARREGAR CATEGORIAS
+  ======================================================= */
+
+  useEffect(() => {
+    async function carregarCategorias() {
+      try {
+        setCarregandoCategorias(true);
+
+        const data =
+          await listarCategoriasEvento();
+
+        setCategorias(data);
+      } catch (error) {
+        console.error(error);
+
+        setErro(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar as categorias."
+        );
+      } finally {
+        setCarregandoCategorias(false);
+      }
+    }
+
+    carregarCategorias();
+  }, []);
+
+  /* =======================================================
+     ORÇAMENTO TOTAL
+  ======================================================= */
+
+  const valorOrcamentoTotal =
+    useMemo(() => {
+      return converterDinheiro(
+        orcamento
+      );
+    }, [orcamento]);
+
+  /* =======================================================
+     TOTAL DISTRIBUÍDO
+  ======================================================= */
+
+  const totalDistribuido =
+    useMemo(() => {
+      return servicosSelecionados.reduce(
+        (total, servico) => {
+          return (
+            total +
+            (converterDinheiro(
+              servico.orcamento
+            ) ?? 0)
+          );
+        },
+        0
+      );
+    }, [servicosSelecionados]);
+
+  const restante =
+    valorOrcamentoTotal == null
+      ? null
+      : valorOrcamentoTotal -
+        totalDistribuido;
+
+  /* =======================================================
+     SELECIONAR CATEGORIA
+  ======================================================= */
+
+  function alternarCategoria(
+    categoriaId: string
+  ) {
+    setServicosSelecionados(
+      (atual) => {
+        const existe =
+          atual.some(
+            (item) =>
+              item.categoria_id ===
+              categoriaId
+          );
+
+        if (existe) {
+          return atual.filter(
+            (item) =>
+              item.categoria_id !==
+              categoriaId
+          );
+        }
+
+        return [
+          ...atual,
+          {
+            categoria_id:
+              categoriaId,
+
+            orcamento: "",
+          },
+        ];
+      }
+    );
+  }
+
+  /* =======================================================
+     ALTERAR ORÇAMENTO DA CATEGORIA
+  ======================================================= */
+
+  function alterarOrcamentoCategoria(
+    categoriaId: string,
+    valor: string
+  ) {
+    setServicosSelecionados(
+      (atual) =>
+        atual.map((item) =>
+          item.categoria_id ===
+          categoriaId
+            ? {
+                ...item,
+                orcamento: valor,
+              }
+            : item
+        )
+    );
+  }
+
+  /* =======================================================
+     VERIFICA SE ESTÁ SELECIONADA
+  ======================================================= */
+
+  function categoriaSelecionada(
+    categoriaId: string
+  ) {
+    return servicosSelecionados.some(
+      (item) =>
+        item.categoria_id ===
+        categoriaId
+    );
+  }
+
+  function buscarServicoSelecionado(
+    categoriaId: string
+  ) {
+    return servicosSelecionados.find(
+      (item) =>
+        item.categoria_id ===
+        categoriaId
+    );
+  }
+
+  /* =======================================================
+     SALVAR
+  ======================================================= */
 
   async function salvar(
     event: FormEvent<HTMLFormElement>
@@ -65,6 +252,7 @@ export default function NovoEventoPage() {
       setErro(
         "Informe o nome do evento."
       );
+
       return;
     }
 
@@ -72,25 +260,28 @@ export default function NovoEventoPage() {
       setEnviando(true);
       setErro("");
 
+      /* ORÇAMENTO */
+
       const valorOrcamento =
-        orcamento.trim()
-          ? Number(
-              orcamento
-                .replace(/\./g, "")
-                .replace(",", ".")
-            )
-          : null;
+        converterDinheiro(
+          orcamento
+        );
 
       if (
         valorOrcamento != null &&
-        (Number.isNaN(valorOrcamento) ||
+        (Number.isNaN(
+          valorOrcamento
+        ) ||
           valorOrcamento < 0)
       ) {
         setErro(
           "Informe um orçamento válido."
         );
+
         return;
       }
+
+      /* CONVIDADOS */
 
       const quantidade =
         convidados.trim()
@@ -99,27 +290,102 @@ export default function NovoEventoPage() {
 
       if (
         quantidade != null &&
-        (!Number.isInteger(quantidade) ||
+        (!Number.isInteger(
+          quantidade
+        ) ||
           quantidade < 0)
       ) {
         setErro(
           "Informe uma quantidade válida de convidados."
         );
+
         return;
       }
 
-      const evento =
+      /* ===============================================
+         VALIDAÇÕES DOS SERVIÇOS
+      =============================================== */
+
+      if (
+        publicar &&
+        servicosSelecionados.length ===
+          0
+      ) {
+        setErro(
+          "Selecione pelo menos um serviço que você procura para publicar o evento."
+        );
+
+        return;
+      }
+
+      const servicosPreparados =
+        servicosSelecionados.map(
+          (servico) => ({
+            categoria_id:
+              servico.categoria_id,
+
+            orcamento_planejado:
+              converterDinheiro(
+                servico.orcamento
+              ),
+          })
+        );
+
+      const possuiValorInvalido =
+        servicosPreparados.some(
+          (servico) =>
+            servico.orcamento_planejado !=
+              null &&
+            (Number.isNaN(
+              servico.orcamento_planejado
+            ) ||
+              servico.orcamento_planejado <
+                0)
+        );
+
+      if (possuiValorInvalido) {
+        setErro(
+          "Existe um orçamento inválido entre os serviços selecionados."
+        );
+
+        return;
+      }
+
+      if (
+        valorOrcamento != null &&
+        totalDistribuido >
+          valorOrcamento
+      ) {
+        setErro(
+          "A soma dos orçamentos dos serviços não pode ultrapassar o orçamento total do evento."
+        );
+
+        return;
+      }
+
+      /* ===============================================
+         CRIAR EVENTO
+      =============================================== */
+
+      const eventoCriado =
         await criarEvento({
           nome,
+
           tipo_evento: tipo,
+
           tema,
+
           descricao,
 
-          data_evento: dataEvento,
+          data_evento:
+            dataEvento,
+
           horario,
 
           cidade,
+
           estado,
+
           endereco,
 
           quantidade_convidados:
@@ -136,8 +402,26 @@ export default function NovoEventoPage() {
             publicar,
         });
 
+      /* ===============================================
+         CRIAR SERVIÇOS DO EVENTO
+      =============================================== */
+
+      if (
+        servicosPreparados.length >
+        0
+      ) {
+        await criarServicosEvento(
+          eventoCriado.id,
+          servicosPreparados
+        );
+      }
+
+      /* ===============================================
+         ABRIR EVENTO
+      =============================================== */
+
       router.push(
-        `/cliente/eventos/${evento.id}`
+        `/cliente/eventos/${eventoCriado.id}`
       );
     } catch (error) {
       console.error(error);
@@ -152,8 +436,13 @@ export default function NovoEventoPage() {
     }
   }
 
+  /* =======================================================
+     PÁGINA
+  ======================================================= */
+
   return (
     <div className="novo-evento-page">
+
       <button
         className="cliente-proposta-voltar"
         onClick={() =>
@@ -175,8 +464,8 @@ export default function NovoEventoPage() {
         </h1>
 
         <p>
-          Conte um pouco sobre o evento que
-          você está planejando.
+          Conte um pouco sobre o evento
+          que você está planejando.
         </p>
       </div>
 
@@ -184,26 +473,22 @@ export default function NovoEventoPage() {
         className="novo-evento-form"
         onSubmit={salvar}
       >
+
+        {/* =================================================
+            01 — SOBRE
+        ================================================= */}
+
         <section className="novo-evento-secao">
-          <div className="novo-evento-secao-titulo">
-            <span>01</span>
 
-            <div>
-              <h2>
-                Sobre o evento
-              </h2>
-
-              <p>
-                Comece pelas informações
-                principais.
-              </p>
-            </div>
-          </div>
+          <TituloSecao
+            numero="01"
+            titulo="Sobre o evento"
+            descricao="Comece pelas informações principais."
+          />
 
           <div className="novo-evento-campos">
-            <Campo
-              label="Nome do evento *"
-            >
+
+            <Campo label="Nome do evento *">
               <input
                 value={nome}
                 onChange={(e) =>
@@ -217,6 +502,7 @@ export default function NovoEventoPage() {
             </Campo>
 
             <div className="novo-evento-duplo">
+
               <Campo label="Tipo de evento">
                 <select
                   value={tipo}
@@ -267,6 +553,7 @@ export default function NovoEventoPage() {
                   placeholder="Ex.: Clássico e elegante"
                 />
               </Campo>
+
             </div>
 
             <Campo label="Descrição">
@@ -281,27 +568,26 @@ export default function NovoEventoPage() {
                 rows={5}
               />
             </Campo>
+
           </div>
         </section>
 
+        {/* =================================================
+            02 — DATA E LOCAL
+        ================================================= */}
+
         <section className="novo-evento-secao">
-          <div className="novo-evento-secao-titulo">
-            <span>02</span>
 
-            <div>
-              <h2>
-                Quando e onde
-              </h2>
-
-              <p>
-                Informe a data e o local
-                planejados.
-              </p>
-            </div>
-          </div>
+          <TituloSecao
+            numero="02"
+            titulo="Quando e onde"
+            descricao="Informe a data e o local planejados."
+          />
 
           <div className="novo-evento-campos">
+
             <div className="novo-evento-duplo">
+
               <Campo label="Data">
                 <input
                   type="date"
@@ -325,6 +611,7 @@ export default function NovoEventoPage() {
                   }
                 />
               </Campo>
+
             </div>
 
             <Campo label="Endereço">
@@ -340,6 +627,7 @@ export default function NovoEventoPage() {
             </Campo>
 
             <div className="novo-evento-duplo">
+
               <Campo label="Cidade">
                 <input
                   value={cidade}
@@ -364,29 +652,28 @@ export default function NovoEventoPage() {
                   maxLength={2}
                 />
               </Campo>
+
             </div>
+
           </div>
         </section>
 
+        {/* =================================================
+            03 — PLANEJAMENTO
+        ================================================= */}
+
         <section className="novo-evento-secao">
-          <div className="novo-evento-secao-titulo">
-            <span>03</span>
 
-            <div>
-              <h2>
-                Planejamento
-              </h2>
-
-              <p>
-                Essas informações ajudam os
-                profissionais a preparar
-                propostas melhores.
-              </p>
-            </div>
-          </div>
+          <TituloSecao
+            numero="03"
+            titulo="Planejamento"
+            descricao="Defina o orçamento geral do seu evento."
+          />
 
           <div className="novo-evento-campos">
+
             <div className="novo-evento-duplo">
+
               <Campo label="Convidados">
                 <input
                   type="number"
@@ -417,33 +704,213 @@ export default function NovoEventoPage() {
                   />
                 </div>
               </Campo>
+
             </div>
 
-            <label className="novo-evento-publicar">
-              <input
-                type="checkbox"
-                checked={publicar}
-                onChange={(e) =>
-                  setPublicar(
-                    e.target.checked
-                  )
-                }
-              />
-
-              <div>
-                <strong>
-                  Publicar para profissionais
-                </strong>
-
-                <span>
-                  Profissionais poderão
-                  encontrar seu evento e enviar
-                  propostas.
-                </span>
-              </div>
-            </label>
           </div>
         </section>
+
+        {/* =================================================
+            04 — SERVIÇOS
+        ================================================= */}
+
+        <section className="novo-evento-secao">
+
+          <TituloSecao
+            numero="04"
+            titulo="Serviços que você precisa"
+            descricao="Escolha as categorias e defina quanto pretende investir em cada uma."
+          />
+
+          {carregandoCategorias ? (
+            <div className="novo-evento-servicos-carregando">
+              Carregando serviços...
+            </div>
+          ) : categorias.length === 0 ? (
+            <div className="novo-evento-servicos-vazio">
+              Nenhuma categoria disponível.
+            </div>
+          ) : (
+            <div className="novo-evento-servicos-grid">
+
+              {categorias.map(
+                (categoria) => {
+                  const selecionada =
+                    categoriaSelecionada(
+                      categoria.id
+                    );
+
+                  const servico =
+                    buscarServicoSelecionado(
+                      categoria.id
+                    );
+
+                  return (
+                    <div
+                      key={categoria.id}
+                      className={`novo-evento-servico-card ${
+                        selecionada
+                          ? "selecionado"
+                          : ""
+                      }`}
+                    >
+
+                      <label className="novo-evento-servico-check">
+
+                        <input
+                          type="checkbox"
+                          checked={
+                            selecionada
+                          }
+                          onChange={() =>
+                            alternarCategoria(
+                              categoria.id
+                            )
+                          }
+                        />
+
+                        <div className="novo-evento-servico-identidade">
+
+                          <span className="novo-evento-servico-icone">
+                            {categoria.icone ||
+                              "✦"}
+                          </span>
+
+                          <strong>
+                            {categoria.nome}
+                          </strong>
+
+                        </div>
+                      </label>
+
+                      {selecionada && (
+                        <div className="novo-evento-servico-orcamento">
+
+                          <span>
+                            Orçamento planejado
+                          </span>
+
+                          <div className="novo-evento-dinheiro">
+
+                            <span>
+                              R$
+                            </span>
+
+                            <input
+                              value={
+                                servico
+                                  ?.orcamento ||
+                                ""
+                              }
+                              onChange={(e) =>
+                                alterarOrcamentoCategoria(
+                                  categoria.id,
+                                  e.target
+                                    .value
+                                )
+                              }
+                              inputMode="decimal"
+                              placeholder="0,00"
+                            />
+
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+                  );
+                }
+              )}
+
+            </div>
+          )}
+
+          {/* RESUMO */}
+
+          <div className="novo-evento-orcamento-resumo">
+
+            <ResumoOrcamento
+              titulo="Orçamento total"
+              valor={
+                valorOrcamentoTotal
+              }
+            />
+
+            <ResumoOrcamento
+              titulo="Distribuído"
+              valor={
+                totalDistribuido
+              }
+            />
+
+            <ResumoOrcamento
+              titulo="Ainda disponível"
+              valor={restante}
+              destaque={
+                restante != null &&
+                restante < 0
+                  ? "erro"
+                  : "positivo"
+              }
+            />
+
+          </div>
+
+          {restante != null &&
+            restante < 0 && (
+              <div className="novo-evento-orcamento-alerta">
+                Você distribuiu{" "}
+                {formatarDinheiro(
+                  Math.abs(restante)
+                )}{" "}
+                acima do orçamento total.
+              </div>
+            )}
+
+        </section>
+
+        {/* =================================================
+            05 — PUBLICAÇÃO
+        ================================================= */}
+
+        <section className="novo-evento-secao">
+
+          <TituloSecao
+            numero="05"
+            titulo="Publicação"
+            descricao="Escolha se deseja publicar o evento agora."
+          />
+
+          <label className="novo-evento-publicar">
+
+            <input
+              type="checkbox"
+              checked={publicar}
+              onChange={(e) =>
+                setPublicar(
+                  e.target.checked
+                )
+              }
+            />
+
+            <div>
+              <strong>
+                Publicar para profissionais
+              </strong>
+
+              <span>
+                Profissionais poderão
+                encontrar as categorias
+                que você procura e enviar
+                propostas.
+              </span>
+            </div>
+
+          </label>
+
+        </section>
+
+        {/* ERRO */}
 
         {erro && (
           <div className="cliente-proposta-erro">
@@ -451,7 +918,10 @@ export default function NovoEventoPage() {
           </div>
         )}
 
+        {/* AÇÕES */}
+
         <div className="novo-evento-acoes">
+
           <button
             type="button"
             className="novo-evento-cancelar"
@@ -475,11 +945,17 @@ export default function NovoEventoPage() {
                 ? "Criar e publicar"
                 : "Salvar rascunho"}
           </button>
+
         </div>
+
       </form>
     </div>
   );
 }
+
+/* =========================================================
+   CAMPO
+========================================================= */
 
 function Campo({
   label,
@@ -494,4 +970,104 @@ function Campo({
       {children}
     </label>
   );
+}
+
+/* =========================================================
+   TÍTULO DA SEÇÃO
+========================================================= */
+
+function TituloSecao({
+  numero,
+  titulo,
+  descricao,
+}: {
+  numero: string;
+  titulo: string;
+  descricao: string;
+}) {
+  return (
+    <div className="novo-evento-secao-titulo">
+
+      <span>{numero}</span>
+
+      <div>
+        <h2>{titulo}</h2>
+        <p>{descricao}</p>
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   RESUMO DO ORÇAMENTO
+========================================================= */
+
+function ResumoOrcamento({
+  titulo,
+  valor,
+  destaque,
+}: {
+  titulo: string;
+  valor: number | null;
+  destaque?:
+    | "positivo"
+    | "erro";
+}) {
+  return (
+    <div
+      className={`novo-evento-orcamento-item ${
+        destaque
+          ? `novo-evento-orcamento-${destaque}`
+          : ""
+      }`}
+    >
+      <span>{titulo}</span>
+
+      <strong>
+        {valor == null
+          ? "—"
+          : formatarDinheiro(
+              valor
+            )}
+      </strong>
+    </div>
+  );
+}
+
+/* =========================================================
+   CONVERTER DINHEIRO
+========================================================= */
+
+function converterDinheiro(
+  valor: string
+): number | null {
+  if (!valor.trim()) {
+    return null;
+  }
+
+  const numero =
+    Number(
+      valor
+        .replace(/\./g, "")
+        .replace(",", ".")
+    );
+
+  return numero;
+}
+
+/* =========================================================
+   FORMATAR DINHEIRO
+========================================================= */
+
+function formatarDinheiro(
+  valor: number
+) {
+  return new Intl.NumberFormat(
+    "pt-BR",
+    {
+      style: "currency",
+      currency: "BRL",
+    }
+  ).format(valor);
 }

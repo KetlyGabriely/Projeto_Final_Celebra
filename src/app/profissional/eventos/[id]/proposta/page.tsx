@@ -7,11 +7,16 @@ import {
   useState,
 } from "react";
 
-import { useRouter } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 
 import {
   buscarEventoPublicoPorId,
   enviarPropostaEvento,
+  EventoServicoPublico,
+  listarServicosEventoPublico,
 } from "@/controllers/eventoController";
 
 import type {
@@ -26,9 +31,22 @@ export default function PropostaEventoPage({
   const { id } = use(params);
 
   const router = useRouter();
+  const searchParams =
+    useSearchParams();
+
+  const eventoServicoId =
+    searchParams.get("servico");
 
   const [evento, setEvento] =
     useState<Evento | null>(null);
+
+  const [
+    eventoServico,
+    setEventoServico,
+  ] =
+    useState<EventoServicoPublico | null>(
+      null
+    );
 
   const [titulo, setTitulo] =
     useState("");
@@ -55,7 +73,7 @@ export default function PropostaEventoPage({
     useState(false);
 
   /* =======================================================
-     CARREGAR EVENTO
+     CARREGAR EVENTO + CATEGORIA
   ======================================================= */
 
   useEffect(() => {
@@ -64,12 +82,23 @@ export default function PropostaEventoPage({
         setCarregando(true);
         setErro("");
 
-        const data =
-          await buscarEventoPublicoPorId(
-            id
+        if (!eventoServicoId) {
+          setErro(
+            "Nenhum serviço foi selecionado para esta proposta."
           );
 
-        if (!data) {
+          return;
+        }
+
+        const [
+          eventoData,
+          servicosData,
+        ] = await Promise.all([
+          buscarEventoPublicoPorId(id),
+          listarServicosEventoPublico(id),
+        ]);
+
+        if (!eventoData) {
           setErro(
             "Este evento não está mais disponível."
           );
@@ -77,10 +106,34 @@ export default function PropostaEventoPage({
           return;
         }
 
-        setEvento(data);
+        const servicoSelecionado =
+          servicosData.find(
+            (item) =>
+              item.id ===
+              eventoServicoId
+          );
+
+        if (!servicoSelecionado) {
+          setErro(
+            "Este serviço não está disponível para o seu perfil."
+          );
+
+          return;
+        }
+
+        setEvento(eventoData);
+
+        setEventoServico(
+          servicoSelecionado
+        );
+
+        const categoria =
+          servicoSelecionado
+            .categorias?.nome ||
+          "serviço";
 
         setTitulo(
-          `Proposta para ${data.nome}`
+          `Proposta de ${categoria}`
         );
       } catch (error) {
         console.error(error);
@@ -88,7 +141,7 @@ export default function PropostaEventoPage({
         setErro(
           error instanceof Error
             ? error.message
-            : "Não foi possível carregar o evento."
+            : "Não foi possível carregar a oportunidade."
         );
       } finally {
         setCarregando(false);
@@ -96,7 +149,7 @@ export default function PropostaEventoPage({
     }
 
     carregar();
-  }, [id]);
+  }, [id, eventoServicoId]);
 
   /* =======================================================
      ENVIAR
@@ -107,7 +160,10 @@ export default function PropostaEventoPage({
   ) {
     event.preventDefault();
 
-    if (!evento) {
+    if (
+      !evento ||
+      !eventoServico
+    ) {
       return;
     }
 
@@ -136,7 +192,9 @@ export default function PropostaEventoPage({
 
     if (
       !valor.trim() ||
-      Number.isNaN(valorConvertido) ||
+      Number.isNaN(
+        valorConvertido
+      ) ||
       valorConvertido <= 0
     ) {
       setErro(
@@ -151,10 +209,19 @@ export default function PropostaEventoPage({
       setErro("");
 
       await enviarPropostaEvento({
-        evento_id: evento.id,
+        evento_id:
+          evento.id,
+
+        evento_servico_id:
+          eventoServico.id,
+
         titulo,
+
         descricao,
-        valor: valorConvertido,
+
+        valor:
+          valorConvertido,
+
         validade:
           validade || null,
       });
@@ -190,28 +257,34 @@ export default function PropostaEventoPage({
   }
 
   /* =======================================================
-     EVENTO NÃO ENCONTRADO
+     INDISPONÍVEL
   ======================================================= */
 
-  if (!evento) {
+  if (
+    !evento ||
+    !eventoServico
+  ) {
     return (
       <div className="prof-eventos-vazio">
         <span>◇</span>
 
         <h2>
-          Evento indisponível
+          Oportunidade indisponível
         </h2>
 
-        <p>{erro}</p>
+        <p>
+          {erro ||
+            "Este serviço não está disponível."}
+        </p>
 
         <button
           onClick={() =>
             router.push(
-              "/profissional/eventos"
+              `/profissional/eventos/${id}`
             )
           }
         >
-          Voltar às oportunidades
+          Voltar ao evento
         </button>
       </div>
     );
@@ -235,9 +308,13 @@ export default function PropostaEventoPage({
         </h1>
 
         <p>
-          O cliente poderá analisar sua
-          proposta e decidir se deseja
-          aceitá-la.
+          Sua proposta para{" "}
+          <strong>
+            {eventoServico.categorias
+              ?.nome ||
+              "este serviço"}
+          </strong>{" "}
+          foi enviada ao cliente.
         </p>
 
         <div className="prof-proposta-sucesso-acoes">
@@ -271,7 +348,6 @@ export default function PropostaEventoPage({
 
   return (
     <div className="prof-proposta-page">
-
       <button
         className="detalhe-interesse-voltar"
         onClick={() =>
@@ -284,11 +360,7 @@ export default function PropostaEventoPage({
       </button>
 
       <div className="prof-proposta-grid">
-
-        {/* FORMULÁRIO */}
-
         <main className="prof-proposta-principal">
-
           <header className="prof-proposta-header">
             <span className="prof-dashboard-label">
               ENVIAR PROPOSTA
@@ -299,9 +371,14 @@ export default function PropostaEventoPage({
             </h1>
 
             <p>
-              Apresente sua proposta para o
-              cliente de forma clara e
-              profissional.
+              Você está enviando uma
+              proposta para{" "}
+              <strong>
+                {eventoServico.categorias
+                  ?.nome ||
+                  "este serviço"}
+              </strong>
+              .
             </p>
           </header>
 
@@ -309,9 +386,6 @@ export default function PropostaEventoPage({
             className="prof-proposta-form"
             onSubmit={enviar}
           >
-
-            {/* TÍTULO */}
-
             <Campo label="Título da proposta">
               <input
                 value={titulo}
@@ -320,12 +394,10 @@ export default function PropostaEventoPage({
                     event.target.value
                   )
                 }
-                placeholder="Ex: Buffet completo para casamento"
+                placeholder="Título da proposta"
                 required
               />
             </Campo>
-
-            {/* DESCRIÇÃO */}
 
             <Campo label="Descrição da proposta">
               <textarea
@@ -342,9 +414,6 @@ export default function PropostaEventoPage({
             </Campo>
 
             <div className="prof-proposta-duplo">
-
-              {/* VALOR */}
-
               <Campo label="Valor da proposta">
                 <div className="prof-proposta-dinheiro">
                   <span>R$</span>
@@ -362,8 +431,6 @@ export default function PropostaEventoPage({
                   />
                 </div>
               </Campo>
-
-              {/* VALIDADE */}
 
               <Campo label="Validade da proposta">
                 <input
@@ -410,10 +477,9 @@ export default function PropostaEventoPage({
           </form>
         </main>
 
-        {/* EVENTO */}
+        {/* EVENTO / CATEGORIA */}
 
         <aside className="prof-proposta-evento">
-
           <span className="prof-dashboard-label">
             OPORTUNIDADE
           </span>
@@ -427,6 +493,28 @@ export default function PropostaEventoPage({
               {evento.tipo_evento}
             </p>
           )}
+
+          {/* CATEGORIA */}
+
+          <div className="prof-proposta-categoria">
+            <span>
+              {eventoServico.categorias
+                ?.icone ||
+                "✦"}
+            </span>
+
+            <div>
+              <small>
+                SERVIÇO SOLICITADO
+              </small>
+
+              <strong>
+                {eventoServico.categorias
+                  ?.nome ||
+                  "Serviço"}
+              </strong>
+            </div>
+          </div>
 
           <div className="prof-proposta-resumo">
             <Resumo
@@ -466,17 +554,32 @@ export default function PropostaEventoPage({
 
           <div className="prof-proposta-orcamento">
             <span>
-              ORÇAMENTO PLANEJADO
+              ORÇAMENTO DESTA CATEGORIA
             </span>
 
             <strong>
-              {evento.orcamento_total != null
+              {eventoServico.orcamento_planejado !=
+              null
                 ? formatarDinheiro(
-                    evento.orcamento_total
+                    eventoServico.orcamento_planejado
                   )
                 : "Não informado"}
             </strong>
           </div>
+
+          {evento.orcamento_total != null && (
+            <div className="prof-proposta-orcamento-total">
+              <span>
+                Orçamento total do evento
+              </span>
+
+              <strong>
+                {formatarDinheiro(
+                  evento.orcamento_total
+                )}
+              </strong>
+            </div>
+          )}
         </aside>
       </div>
     </div>
@@ -523,7 +626,9 @@ function formatarData(
   return new Intl.DateTimeFormat(
     "pt-BR"
   ).format(
-    new Date(`${data}T12:00:00`)
+    new Date(
+      `${data}T12:00:00`
+    )
   );
 }
 

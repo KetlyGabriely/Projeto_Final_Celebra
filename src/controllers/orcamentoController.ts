@@ -217,15 +217,30 @@ export type StatusOrcamento =
   | "cancelado"
   | "expirado";
 
+
 export interface OrcamentoCliente {
+
+  origem: "interesse" | "evento";
+
+  evento_id: string | null;
+
+  eventos: {
+    id: string;
+    nome: string;
+    tipo_evento: string | null;
+    tema: string | null;
+    data_evento: string | null;
+    horario: string | null;
+    cidade: string | null;
+    estado: string | null;
+  } | null;
+
   id: string;
   cliente_id: string;
   profissional_id: string;
   servico_id: string | null;
-  evento_id: string | null;
-  interesse_id: string | null;
 
-  origem: "interesse" | "evento";
+  interesse_id: string | null;
 
   titulo: string | null;
   descricao: string;
@@ -241,7 +256,7 @@ export interface OrcamentoCliente {
     id: string;
     nome: string;
 
-    categorias_servico?: {
+    categorias?: {
       id: string;
       nome: string;
       icone: string | null;
@@ -321,7 +336,7 @@ export async function listarOrcamentosCliente(): Promise<
         id,
         nome,
 
-        categorias_servico (
+        categorias (
           id,
           nome,
           icone
@@ -412,7 +427,7 @@ export async function buscarOrcamentoClientePorId(
         id,
         nome,
 
-        categorias_servico (
+        categorias (
           id,
           nome,
           icone
@@ -515,11 +530,11 @@ export interface OrcamentoProfissional {
   validade: string | null;
 
   status:
-    | "pendente"
-    | "aceito"
-    | "recusado"
-    | "cancelado"
-    | "expirado";
+  | "pendente"
+  | "aceito"
+  | "recusado"
+  | "cancelado"
+  | "expirado";
 
   criado_em: string;
   atualizado_em: string;
@@ -528,7 +543,7 @@ export interface OrcamentoProfissional {
     id: string;
     nome: string;
 
-    categorias_servico?: {
+    categorias?: {
       id: string;
       nome: string;
       icone: string | null;
@@ -585,32 +600,30 @@ export async function listarOrcamentosProfissional(): Promise<
   const { data, error } = await supabase
     .from("orcamentos")
     .select(`
+  *,
+  profissionais (
+    id,
+    nome_empresa
+  ),
+  servicos (
+    id,
+    nome,
+    categorias (
       id,
-      cliente_id,
-      profissional_id,
-      servico_id,
-      evento_id,
-      interesse_id,
-      origem,
-      titulo,
-      descricao,
-      valor,
-      validade,
-      status,
-      criado_em,
-      atualizado_em,
-
-      servicos (
-        id,
-        nome,
-
-        categorias_servico (
-          id,
-          nome,
-          icone
-        )
-      )
-    `)
+      nome,
+      icone
+    )
+  ),
+  eventos (
+    id,
+    nome,
+    tipo_evento,
+    tema,
+    data_evento,
+    cidade,
+    estado
+  )
+`)
     .eq(
       "profissional_id",
       profissional.id
@@ -783,6 +796,10 @@ export async function buscarOrcamentoEventoCliente(
 export async function aceitarOrcamentoEvento(
   orcamentoId: string
 ) {
+  /* =======================================================
+     USUÁRIO LOGADO
+  ======================================================= */
+
   const {
     data: usuarioData,
     error: usuarioError,
@@ -793,8 +810,14 @@ export async function aceitarOrcamentoEvento(
   }
 
   if (!usuarioData.user) {
-    throw new Error("Você precisa estar autenticado.");
+    throw new Error(
+      "Você precisa estar autenticado."
+    );
   }
+
+  /* =======================================================
+     CLIENTE
+  ======================================================= */
 
   const {
     data: cliente,
@@ -802,90 +825,208 @@ export async function aceitarOrcamentoEvento(
   } = await supabase
     .from("clientes")
     .select("id")
-    .eq("usuario_id", usuarioData.user.id)
+    .eq(
+      "usuario_id",
+      usuarioData.user.id
+    )
     .maybeSingle();
 
   if (clienteError) {
-    throw new Error(clienteError.message);
+    throw new Error(
+      clienteError.message
+    );
   }
 
   if (!cliente) {
-    throw new Error("Perfil de cliente não encontrado.");
+    throw new Error(
+      "Perfil de cliente não encontrado."
+    );
   }
 
-  /* CONFIRMA QUE O ORÇAMENTO PERTENCE AO CLIENTE */
+  /* =======================================================
+     BUSCAR PROPOSTA
+  ======================================================= */
 
   const {
     data: orcamento,
     error: buscarError,
   } = await supabase
     .from("orcamentos")
-    .select("id, evento_id, status")
+    .select(`
+      id,
+      evento_id,
+      cliente_id,
+      profissional_id,
+      status,
+      origem
+    `)
     .eq("id", orcamentoId)
     .eq("cliente_id", cliente.id)
     .eq("origem", "evento")
     .maybeSingle();
 
   if (buscarError) {
-    throw new Error(buscarError.message);
-  }
-
-  if (!orcamento) {
-    throw new Error("Orçamento não encontrado.");
-  }
-
-  if (orcamento.status !== "pendente") {
     throw new Error(
-      "Este orçamento já foi respondido."
+      buscarError.message
     );
   }
 
-  /* ACEITA */
+  if (!orcamento) {
+    throw new Error(
+      "Proposta não encontrada."
+    );
+  }
+
+  if (!orcamento.evento_id) {
+    throw new Error(
+      "Esta proposta não possui um evento associado."
+    );
+  }
+
+  if (
+    orcamento.status !== "pendente"
+  ) {
+    throw new Error(
+      "Esta proposta já foi respondida."
+    );
+  }
+
+  /* =======================================================
+     VERIFICAR EVENTO
+  ======================================================= */
 
   const {
-    data,
-    error,
+    data: evento,
+    error: eventoError,
+  } = await supabase
+    .from("eventos")
+    .select(`
+      id,
+      cliente_id,
+      status
+    `)
+    .eq(
+      "id",
+      orcamento.evento_id
+    )
+    .eq(
+      "cliente_id",
+      cliente.id
+    )
+    .maybeSingle();
+
+  if (eventoError) {
+    throw new Error(
+      eventoError.message
+    );
+  }
+
+  if (!evento) {
+    throw new Error(
+      "Evento não encontrado."
+    );
+  }
+
+  /* =======================================================
+     ACEITAR PROPOSTA ESCOLHIDA
+  ======================================================= */
+
+  const agora =
+    new Date().toISOString();
+
+  const {
+    data: propostaAceita,
+    error: aceitarError,
   } = await supabase
     .from("orcamentos")
     .update({
       status: "aceito",
-      atualizado_em: new Date().toISOString(),
+      atualizado_em: agora,
     })
     .eq("id", orcamento.id)
     .eq("cliente_id", cliente.id)
+    .eq("status", "pendente")
     .select("*")
     .single();
 
-  if (error) {
-    throw new Error(error.message);
+  if (aceitarError) {
+    throw new Error(
+      aceitarError.message
+    );
   }
 
-  /*
-   * Se a proposta pertence a um evento,
-   * marcamos o evento como confirmado.
-   */
+  /* =======================================================
+     RECUSAR OUTRAS PROPOSTAS DO EVENTO
+  ======================================================= */
 
-  if (orcamento.evento_id) {
-    const {
-      error: eventoError,
-    } = await supabase
-      .from("eventos")
-      .update({
-        status: "confirmado",
-        visivel_profissionais: false,
-        atualizado_em: new Date().toISOString(),
-      })
-      .eq("id", orcamento.evento_id)
-      .eq("cliente_id", cliente.id);
+  const {
+    error: outrasError,
+  } = await supabase
+    .from("orcamentos")
+    .update({
+      status: "recusado",
+      atualizado_em: agora,
+    })
+    .eq(
+      "evento_id",
+      orcamento.evento_id
+    )
+    .eq(
+      "cliente_id",
+      cliente.id
+    )
+    .eq(
+      "origem",
+      "evento"
+    )
+    .eq(
+      "status",
+      "pendente"
+    )
+    .neq(
+      "id",
+      orcamento.id
+    );
 
-    if (eventoError) {
-      throw new Error(eventoError.message);
-    }
+  if (outrasError) {
+    throw new Error(
+      `A proposta foi aceita, mas não foi possível atualizar as demais propostas: ${outrasError.message}`
+    );
   }
 
-  return data;
+  /* =======================================================
+     CONFIRMAR EVENTO
+  ======================================================= */
+
+  const {
+    error: confirmarEventoError,
+  } = await supabase
+    .from("eventos")
+    .update({
+      status: "confirmado",
+
+      visivel_profissionais:
+        false,
+
+      atualizado_em: agora,
+    })
+    .eq(
+      "id",
+      orcamento.evento_id
+    )
+    .eq(
+      "cliente_id",
+      cliente.id
+    );
+
+  if (confirmarEventoError) {
+    throw new Error(
+      `A proposta foi aceita, mas não foi possível confirmar o evento: ${confirmarEventoError.message}`
+    );
+  }
+
+  return propostaAceita;
 }
-
 
 /* =========================================================
    RECUSAR ORÇAMENTO

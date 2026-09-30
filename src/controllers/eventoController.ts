@@ -343,12 +343,10 @@ export async function atualizarEvento(
 }
 
 /* =========================================================
-   LISTAR EVENTOS DISPONÍVEIS PARA PROFISSIONAIS
+   CATEGORIAS EM QUE O PROFISSIONAL ATUA
 ========================================================= */
 
-export async function listarEventosPublicos(): Promise<
-  Evento[]
-> {
+async function buscarCategoriasProfissional(): Promise<string[]> {
   const {
     data: usuarioData,
     error: usuarioError,
@@ -388,10 +386,113 @@ export async function listarEventosPublicos(): Promise<
     );
   }
 
-  const { data, error } = await supabase
+  const {
+    data: servicos,
+    error: servicosError,
+  } = await supabase
+    .from("servicos")
+    .select("categoria_id")
+    .eq(
+      "profissional_id",
+      profissional.id
+    );
+
+  if (servicosError) {
+    throw new Error(
+      servicosError.message
+    );
+  }
+
+  return [
+    ...new Set(
+      (servicos ?? [])
+        .map(
+          (servico) =>
+            servico.categoria_id
+        )
+        .filter(
+          (categoriaId): categoriaId is string =>
+            Boolean(categoriaId)
+        )
+    ),
+  ];
+}
+
+/* =========================================================
+   LISTAR EVENTOS DISPONÍVEIS PARA PROFISSIONAIS
+========================================================= */
+
+export async function listarEventosPublicos(): Promise<
+  Evento[]
+> {
+  const categoriasProfissional =
+    await buscarCategoriasProfissional();
+
+  /*
+   * Se o profissional ainda não cadastrou nenhum
+   * serviço, ele não possui categoria de atuação.
+   */
+  if (
+    categoriasProfissional.length === 0
+  ) {
+    return [];
+  }
+
+  /*
+   * Descobre quais eventos estão procurando
+   * alguma categoria atendida pelo profissional.
+   */
+  const {
+    data: oportunidades,
+    error: oportunidadesError,
+  } = await supabase
+    .from("evento_servicos")
+    .select("evento_id")
+    .in(
+      "categoria_id",
+      categoriasProfissional
+    )
+    .eq("status", "procurando");
+
+  if (oportunidadesError) {
+    throw new Error(
+      oportunidadesError.message
+    );
+  }
+
+  const eventoIds = [
+    ...new Set(
+      (oportunidades ?? [])
+        .map(
+          (oportunidade) =>
+            oportunidade.evento_id
+        )
+        .filter(
+          (eventoId): eventoId is string =>
+            Boolean(eventoId)
+        )
+    ),
+  ];
+
+  /*
+   * Nenhum evento possui uma categoria
+   * compatível.
+   */
+  if (eventoIds.length === 0) {
+    return [];
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
     .from("eventos")
     .select("*")
-    .eq("visivel_profissionais", true)
+    .in("id", eventoIds)
+    .eq(
+      "visivel_profissionais",
+      true
+    )
     .eq("status", "publicado")
     .order("data_evento", {
       ascending: true,
@@ -412,50 +513,55 @@ export async function listarEventosPublicos(): Promise<
 export async function buscarEventoPublicoPorId(
   eventoId: string
 ): Promise<Evento | null> {
-  const {
-    data: usuarioData,
-    error: usuarioError,
-  } = await supabase.auth.getUser();
+  const categoriasProfissional =
+    await buscarCategoriasProfissional();
 
-  if (usuarioError) {
-    throw new Error(usuarioError.message);
+  if (
+    categoriasProfissional.length === 0
+  ) {
+    return null;
   }
 
-  if (!usuarioData.user) {
-    throw new Error(
-      "Você precisa estar autenticado."
-    );
-  }
-
+  /*
+   * Verifica se existe pelo menos uma
+   * oportunidade compatível nesse evento.
+   */
   const {
-    data: profissional,
-    error: profissionalError,
+    data: oportunidade,
+    error: oportunidadeError,
   } = await supabase
-    .from("profissionais")
+    .from("evento_servicos")
     .select("id")
-    .eq(
-      "usuario_id",
-      usuarioData.user.id
+    .eq("evento_id", eventoId)
+    .in(
+      "categoria_id",
+      categoriasProfissional
     )
+    .eq("status", "procurando")
+    .limit(1)
     .maybeSingle();
 
-  if (profissionalError) {
+  if (oportunidadeError) {
     throw new Error(
-      profissionalError.message
+      oportunidadeError.message
     );
   }
 
-  if (!profissional) {
-    throw new Error(
-      "Perfil profissional não encontrado."
-    );
+  if (!oportunidade) {
+    return null;
   }
 
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from("eventos")
     .select("*")
     .eq("id", eventoId)
-    .eq("visivel_profissionais", true)
+    .eq(
+      "visivel_profissionais",
+      true
+    )
     .eq("status", "publicado")
     .maybeSingle();
 
@@ -478,10 +584,21 @@ export type CriarPropostaEvento = {
   validade?: string | null;
 };
 
+export interface NovaPropostaEvento {
+  evento_id: string;
+  evento_servico_id: string;
+  titulo: string;
+  descricao: string;
+  valor: number;
+  validade?: string | null;
+}
+
 export async function enviarPropostaEvento(
-  dados: CriarPropostaEvento
+  dados: NovaPropostaEvento
 ) {
-  /* USUÁRIO LOGADO */
+  /* =======================================================
+     1. USUÁRIO
+  ======================================================= */
 
   const {
     data: usuarioData,
@@ -498,7 +615,9 @@ export async function enviarPropostaEvento(
     );
   }
 
-  /* PROFISSIONAL */
+  /* =======================================================
+     2. PROFISSIONAL
+  ======================================================= */
 
   const {
     data: profissional,
@@ -524,16 +643,26 @@ export async function enviarPropostaEvento(
     );
   }
 
-  /* EVENTO */
+  /* =======================================================
+     3. EVENTO
+  ======================================================= */
 
   const {
     data: evento,
     error: eventoError,
   } = await supabase
     .from("eventos")
-    .select("id, cliente_id, nome, visivel_profissionais, status")
+    .select(`
+      id,
+      cliente_id,
+      status,
+      visivel_profissionais
+    `)
     .eq("id", dados.evento_id)
-    .eq("visivel_profissionais", true)
+    .eq(
+      "visivel_profissionais",
+      true
+    )
     .eq("status", "publicado")
     .maybeSingle();
 
@@ -549,33 +678,88 @@ export async function enviarPropostaEvento(
     );
   }
 
-  /* VALIDAÇÕES */
-
-  if (!dados.titulo.trim()) {
-    throw new Error(
-      "Informe um título para a proposta."
-    );
-  }
-
-  if (!dados.descricao.trim()) {
-    throw new Error(
-      "Descreva sua proposta."
-    );
-  }
-
-  if (
-    !Number.isFinite(dados.valor) ||
-    dados.valor <= 0
-  ) {
-    throw new Error(
-      "Informe um valor válido."
-    );
-  }
-
-  /* VERIFICA SE JÁ EXISTE PROPOSTA */
+  /* =======================================================
+     4. SERVIÇO/CATEGORIA PROCURADA NO EVENTO
+  ======================================================= */
 
   const {
-    data: propostaExistente,
+    data: eventoServico,
+    error: eventoServicoError,
+  } = await supabase
+    .from("evento_servicos")
+    .select(`
+      id,
+      evento_id,
+      categoria_id,
+      status
+    `)
+    .eq(
+      "id",
+      dados.evento_servico_id
+    )
+    .eq(
+      "evento_id",
+      dados.evento_id
+    )
+    .eq("status", "procurando")
+    .maybeSingle();
+
+  if (eventoServicoError) {
+    throw new Error(
+      eventoServicoError.message
+    );
+  }
+
+  if (!eventoServico) {
+    throw new Error(
+      "Este serviço não está mais recebendo propostas."
+    );
+  }
+
+  /* =======================================================
+     5. CONFIRMAR QUE O PROFISSIONAL ATUA NESSA CATEGORIA
+  ======================================================= */
+
+  const {
+    data: servicoProfissional,
+    error: servicoError,
+  } = await supabase
+    .from("servicos")
+    .select(`
+      id,
+      categoria_id
+    `)
+    .eq(
+      "profissional_id",
+      profissional.id
+    )
+    .eq(
+      "categoria_id",
+      eventoServico.categoria_id
+    )
+    .eq("ativo", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (servicoError) {
+    throw new Error(
+      servicoError.message
+    );
+  }
+
+  if (!servicoProfissional) {
+    throw new Error(
+      "Você não possui um serviço ativo nesta categoria."
+    );
+  }
+
+  /* =======================================================
+     6. EVITAR DUAS PROPOSTAS DO MESMO PROFISSIONAL
+        PARA A MESMA CATEGORIA DO EVENTO
+  ======================================================= */
+
+  const {
+    data: existente,
     error: existenteError,
   } = await supabase
     .from("orcamentos")
@@ -584,8 +768,12 @@ export async function enviarPropostaEvento(
       "profissional_id",
       profissional.id
     )
-    .eq("evento_id", evento.id)
-    .eq("origem", "evento")
+    .eq(
+      "evento_servico_id",
+      eventoServico.id
+    )
+    .neq("status", "cancelado")
+    .limit(1)
     .maybeSingle();
 
   if (existenteError) {
@@ -594,17 +782,19 @@ export async function enviarPropostaEvento(
     );
   }
 
-  if (propostaExistente) {
+  if (existente) {
     throw new Error(
-      "Você já enviou uma proposta para este evento."
+      "Você já enviou uma proposta para este serviço."
     );
   }
 
-  /* CRIA ORÇAMENTO */
+  /* =======================================================
+     7. CRIAR ORÇAMENTO
+  ======================================================= */
 
   const {
-    data: proposta,
-    error: propostaError,
+    data,
+    error,
   } = await supabase
     .from("orcamentos")
     .insert({
@@ -614,10 +804,15 @@ export async function enviarPropostaEvento(
       profissional_id:
         profissional.id,
 
+      servico_id:
+        servicoProfissional.id,
+
       evento_id:
         evento.id,
 
-      servico_id: null,
+      evento_servico_id:
+        eventoServico.id,
+
       interesse_id: null,
 
       origem: "evento",
@@ -639,11 +834,165 @@ export async function enviarPropostaEvento(
     .select("*")
     .single();
 
-  if (propostaError) {
-    throw new Error(
-      propostaError.message
-    );
+  if (error) {
+    throw new Error(error.message);
   }
 
-  return proposta;
+  return data;
+}
+
+/* =========================================================
+   CATEGORIAS PARA O EVENTO
+========================================================= */
+
+export type CategoriaEvento = {
+  id: string;
+  nome: string;
+  icone: string | null;
+};
+
+export async function listarCategoriasEvento(): Promise<
+  CategoriaEvento[]
+> {
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("categorias")
+    .select(`
+      id,
+      nome,
+      icone
+    `)
+    .order("nome", {
+      ascending: true,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ?? [];
+}
+
+
+/* =========================================================
+   SERVIÇOS ESCOLHIDOS PARA UM EVENTO
+========================================================= */
+
+export type NovoEventoServico = {
+  categoria_id: string;
+  orcamento_planejado: number | null;
+  observacoes?: string | null;
+};
+
+export async function criarServicosEvento(
+  eventoId: string,
+  servicos: NovoEventoServico[]
+) {
+  if (servicos.length === 0) {
+    return [];
+  }
+
+  const registros = servicos.map(
+    (servico) => ({
+      evento_id: eventoId,
+
+      categoria_id:
+        servico.categoria_id,
+
+      orcamento_planejado:
+        servico.orcamento_planejado,
+
+      observacoes:
+        servico.observacoes || null,
+
+      status: "procurando",
+    })
+  );
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("evento_servicos")
+    .insert(registros)
+    .select("*");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ?? [];
+}
+
+/* =========================================================
+   SERVIÇOS PROCURADOS EM UM EVENTO
+========================================================= */
+
+export type EventoServicoPublico = {
+  id: string;
+  evento_id: string;
+  categoria_id: string;
+  orcamento_planejado: number | null;
+  observacoes: string | null;
+  status:
+    | "procurando"
+    | "contratado"
+    | "cancelado";
+
+  categorias: {
+    id: string;
+    nome: string;
+    icone: string | null;
+  } | null;
+};
+
+export async function listarServicosEventoPublico(
+  eventoId: string
+): Promise<EventoServicoPublico[]> {
+  const categoriasProfissional =
+    await buscarCategoriasProfissional();
+
+  if (
+    categoriasProfissional.length === 0
+  ) {
+    return [];
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("evento_servicos")
+    .select(`
+      id,
+      evento_id,
+      categoria_id,
+      orcamento_planejado,
+      observacoes,
+      status,
+
+      categorias (
+        id,
+        nome,
+        icone
+      )
+    `)
+    .eq("evento_id", eventoId)
+    .in(
+      "categoria_id",
+      categoriasProfissional
+    )
+    .eq("status", "procurando")
+    .order("criado_em", {
+      ascending: true,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as unknown as
+    EventoServicoPublico[];
 }
