@@ -11,7 +11,6 @@ export default function SidebarCliente() {
     { nome: "Início", rota: "/cliente", icone: "⌂" },
     { nome: "Explorar serviços", rota: "/cliente/servicos", icone: "◇" },
     { nome: "Meus eventos", rota: "/cliente/eventos", icone: "♡" },
-    { nome: "Interesses", rota: "/cliente/interesses", icone: "✦" },
     { nome: "Orçamentos", rota: "/cliente/orcamentos", icone: "▤" },
     { nome: "Favoritos", rota: "/cliente/favoritos", icone: "☆" },
     { nome: "Meu perfil", rota: "/cliente/perfil", icone: "○" },

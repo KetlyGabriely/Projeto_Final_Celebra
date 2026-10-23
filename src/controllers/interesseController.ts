@@ -9,6 +9,7 @@ export async function criarInteresse({
   servico_id,
   mensagem,
 }: CriarInteresse) {
+  // Usuário autenticado
   const {
     data: usuarioData,
     error: usuarioError,
@@ -19,11 +20,10 @@ export async function criarInteresse({
   }
 
   if (!usuarioData.user) {
-    throw new Error(
-      "Você precisa estar autenticado."
-    );
+    throw new Error("Você precisa estar autenticado.");
   }
 
+  // Perfil do cliente
   const {
     data: cliente,
     error: clienteError,
@@ -38,11 +38,10 @@ export async function criarInteresse({
   }
 
   if (!cliente) {
-    throw new Error(
-      "Perfil de cliente não encontrado."
-    );
+    throw new Error("Perfil de cliente não encontrado.");
   }
 
+  // Evita criar vários interesses iguais em sequência
   const {
     data: interesseExistente,
     error: verificacaoError,
@@ -51,17 +50,11 @@ export async function criarInteresse({
     .select("id, status")
     .eq("cliente_id", cliente.id)
     .eq("servico_id", servico_id)
-    .in("status", [
-      "pendente",
-      "visualizado",
-      "respondido",
-    ])
+    .in("status", ["pendente", "visualizado", "respondido"])
     .maybeSingle();
 
   if (verificacaoError) {
-    throw new Error(
-      verificacaoError.message
-    );
+    throw new Error(verificacaoError.message);
   }
 
   if (interesseExistente) {
@@ -75,8 +68,7 @@ export async function criarInteresse({
     .insert({
       cliente_id: cliente.id,
       servico_id,
-      mensagem:
-        mensagem?.trim() || null,
+      mensagem: mensagem?.trim() || null,
       status: "pendente",
     })
     .select("id, status")
@@ -88,10 +80,6 @@ export async function criarInteresse({
 
   return data;
 }
-
-/* =========================================================
-   TIPO DE INTERESSE RECEBIDO
-========================================================= */
 
 export interface InteresseRecebido {
   id: string;
@@ -119,7 +107,6 @@ export interface InteresseRecebido {
     id: string;
     nome: string;
     preco_inicial: number | null;
-    profissional_id?: string;
 
     categorias?: {
       id: string;
@@ -128,10 +115,6 @@ export interface InteresseRecebido {
     } | null;
   } | null;
 }
-
-/* =========================================================
-   LISTAR INTERESSES RECEBIDOS
-========================================================= */
 
 export async function listarInteressesRecebidos(): Promise<
   InteresseRecebido[]
@@ -142,9 +125,7 @@ export async function listarInteressesRecebidos(): Promise<
   } = await supabase.auth.getUser();
 
   if (usuarioError) {
-    throw new Error(
-      usuarioError.message
-    );
+    throw new Error(usuarioError.message);
   }
 
   if (!usuarioData.user) {
@@ -153,20 +134,14 @@ export async function listarInteressesRecebidos(): Promise<
     );
   }
 
-  /*
-   * Descobre qual profissional pertence
-   * ao usuário logado.
-   */
+  // Descobre qual profissional pertence ao usuário logado.
   const {
     data: profissional,
     error: profissionalError,
   } = await supabase
     .from("profissionais")
     .select("id")
-    .eq(
-      "usuario_id",
-      usuarioData.user.id
-    )
+    .eq("usuario_id", usuarioData.user.id)
     .maybeSingle();
 
   if (profissionalError) {
@@ -181,25 +156,17 @@ export async function listarInteressesRecebidos(): Promise<
     );
   }
 
-  /*
-   * Busca os serviços pertencentes
-   * ao profissional.
-   */
+  // Primeiro buscamos somente os serviços deste profissional.
   const {
     data: servicosProfissional,
     error: servicosError,
   } = await supabase
     .from("servicos")
     .select("id")
-    .eq(
-      "profissional_id",
-      profissional.id
-    );
+    .eq("profissional_id", profissional.id);
 
   if (servicosError) {
-    throw new Error(
-      servicosError.message
-    );
+    throw new Error(servicosError.message);
   }
 
   const servicoIds =
@@ -211,75 +178,58 @@ export async function listarInteressesRecebidos(): Promise<
     return [];
   }
 
-  /*
-   * Busca os interesses recebidos
-   * nos serviços do profissional.
-   *
-   * IMPORTANTE:
-   * servicos.categoria_id agora aponta
-   * para categorias.id.
-   */
-  const { data, error } =
-    await supabase
-      .from("interesses")
-      .select(`
-        id,
-        cliente_id,
-        servico_id,
-        evento_id,
-        mensagem,
-        data_evento,
-        quantidade_convidados,
-        cidade,
-        estado,
-        status,
-        criado_em,
+  // Depois buscamos os interesses desses serviços.
+  const { data, error } = await supabase
+    .from("interesses")
+    .select(`
+      id,
+      cliente_id,
+      servico_id,
+      evento_id,
+      mensagem,
+      data_evento,
+      quantidade_convidados,
+      cidade,
+      estado,
+      status,
+      criado_em,
 
-        servicos (
+      servicos (
+        id,
+        nome,
+        preco_inicial,
+
+        categorias (
           id,
           nome,
-          preco_inicial,
-
-          categorias (
-            id,
-            nome,
-            icone
-          )
+          icone
         )
-      `)
-      .in(
-        "servico_id",
-        servicoIds
       )
-      .order("criado_em", {
-        ascending: false,
-      });
+    `)
+    .in("servico_id", servicoIds)
+    .order("criado_em", {
+      ascending: false,
+    });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return (data ??
-    []) as unknown as InteresseRecebido[];
+  return (data ?? []) as unknown as InteresseRecebido[];
 }
-
-/* =========================================================
-   MARCAR COMO VISUALIZADO
-========================================================= */
 
 export async function marcarInteresseComoVisualizado(
   interesseId: string
 ) {
-  const { data, error } =
-    await supabase
-      .from("interesses")
-      .update({
-        status: "visualizado",
-      })
-      .eq("id", interesseId)
-      .eq("status", "pendente")
-      .select("id, status")
-      .maybeSingle();
+  const { data, error } = await supabase
+    .from("interesses")
+    .update({
+      status: "visualizado",
+    })
+    .eq("id", interesseId)
+    .eq("status", "pendente")
+    .select("id, status")
+    .maybeSingle();
 
   if (error) {
     throw new Error(error.message);
@@ -287,10 +237,6 @@ export async function marcarInteresseComoVisualizado(
 
   return data;
 }
-
-/* =========================================================
-   BUSCAR INTERESSE POR ID
-========================================================= */
 
 export async function buscarInteresseRecebidoPorId(
   interesseId: string
@@ -301,9 +247,7 @@ export async function buscarInteresseRecebidoPorId(
   } = await supabase.auth.getUser();
 
   if (usuarioError) {
-    throw new Error(
-      usuarioError.message
-    );
+    throw new Error(usuarioError.message);
   }
 
   if (!usuarioData.user) {
@@ -312,25 +256,17 @@ export async function buscarInteresseRecebidoPorId(
     );
   }
 
-  /*
-   * Descobre o profissional logado.
-   */
   const {
     data: profissional,
     error: profissionalError,
   } = await supabase
     .from("profissionais")
     .select("id")
-    .eq(
-      "usuario_id",
-      usuarioData.user.id
-    )
+    .eq("usuario_id", usuarioData.user.id)
     .maybeSingle();
 
   if (profissionalError) {
-    throw new Error(
-      profissionalError.message
-    );
+    throw new Error(profissionalError.message);
   }
 
   if (!profissional) {
@@ -339,10 +275,6 @@ export async function buscarInteresseRecebidoPorId(
     );
   }
 
-  /*
-   * Busca o interesse e garante que
-   * o serviço pertence ao profissional.
-   */
   const {
     data: interesse,
     error,
