@@ -282,11 +282,11 @@ function OrcamentoCard({
 
   const categoria =
     orcamento.servicos
-      ?.categorias_servico?.nome;
+      ?.categorias?.nome;
 
   const icone =
     orcamento.servicos
-      ?.categorias_servico?.icone ||
+      ?.categorias?.icone ||
     "✦";
 
   const data =

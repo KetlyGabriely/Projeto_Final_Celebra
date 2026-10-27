@@ -406,12 +406,12 @@ export default function DetalhesOrcamentoClientePage({
                 </strong>
 
                 {orcamento.servicos
-                  ?.categorias_servico
+                  ?.categorias
                   ?.nome && (
                   <small>
                     {
                       orcamento.servicos
-                        .categorias_servico
+                        .categorias
                         .nome
                     }
                   </small>

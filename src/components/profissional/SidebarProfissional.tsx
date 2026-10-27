@@ -7,6 +7,7 @@ export default function SidebarProfissional() {
   const router = useRouter();
   const pathname = usePathname();
 
+
   const itens = [
     {
       nome: "Início",
@@ -38,7 +39,13 @@ export default function SidebarProfissional() {
       rota: "/profissional/perfil",
       icone: "○",
     },
+    {
+      nome: "Configurações",
+      rota: "/profissional/configuracoes",
+      icone: "⚙",
+    },
   ];
+
 
   function estaAtivo(rota: string) {
     if (rota === "/profissional") {
@@ -79,9 +86,8 @@ export default function SidebarProfissional() {
         {itens.map((item) => (
           <button
             key={item.rota}
-            className={`prof-sidebar-item ${
-              estaAtivo(item.rota) ? "ativo" : ""
-            }`}
+            className={`prof-sidebar-item ${estaAtivo(item.rota) ? "ativo" : ""
+              }`}
             onClick={() => router.push(item.rota)}
           >
             <span className="prof-sidebar-icone">

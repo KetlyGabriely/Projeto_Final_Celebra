@@ -8,6 +8,14 @@ import {
   listarServicos,
 } from "@/controllers/servicoController";
 
+
+import {
+  listarFavoritos,
+  adicionarFavorito,
+  removerFavorito,
+} from "@/controllers/favoritoController";
+
+
 import type {
   CategoriaServico,
   Servico,
@@ -33,6 +41,58 @@ export default function ServicosPage() {
 
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+
+
+  const [favoritos, setFavoritos] = useState<string[]>([]);
+  const [favoritosPendentes, setFavoritosPendentes] =
+    useState<string[]>([]);
+
+  useEffect(() => {
+    async function carregarFavoritos() {
+      try {
+        const ids = await listarFavoritos();
+        setFavoritos(ids);
+      } catch (error) {
+        console.error("Erro ao carregar favoritos:", error);
+      }
+    }
+
+    carregarFavoritos();
+  }, []);
+
+  async function alternarFavorito(servicoId: string) {
+    if (favoritosPendentes.includes(servicoId)) return;
+
+    const jaFavorito = favoritos.includes(servicoId);
+
+    setFavoritosPendentes((anterior) => [
+      ...anterior,
+      servicoId,
+    ]);
+
+    try {
+      if (jaFavorito) {
+        await removerFavorito(servicoId);
+        setFavoritos((anterior) =>
+          anterior.filter((id) => id !== servicoId)
+        );
+      } else {
+        await adicionarFavorito(servicoId);
+        setFavoritos((anterior) => [
+          ...anterior,
+          servicoId,
+        ]);
+      }
+    } catch (error) {
+      console.error("Erro ao alterar favorito:", error);
+      alert("Não foi possível atualizar o favorito.");
+    } finally {
+      setFavoritosPendentes((anterior) =>
+        anterior.filter((id) => id !== servicoId)
+      );
+    }
+  }
+
 
   const carregarDados = useCallback(async () => {
     try {
@@ -167,11 +227,10 @@ export default function ServicosPage() {
 
       <section className="servicos-filtros">
         <button
-          className={`filtro-categoria ${
-            categoriaSelecionada === ""
-              ? "selecionado"
-              : ""
-          }`}
+          className={`filtro-categoria ${categoriaSelecionada === ""
+            ? "selecionado"
+            : ""
+            }`}
           onClick={() => selecionarCategoria("")}
         >
           Todos
@@ -180,11 +239,10 @@ export default function ServicosPage() {
         {categorias.map((categoria) => (
           <button
             key={categoria.id}
-            className={`filtro-categoria ${
-              categoriaSelecionada === categoria.slug
-                ? "selecionado"
-                : ""
-            }`}
+            className={`filtro-categoria ${categoriaSelecionada === categoria.slug
+              ? "selecionado"
+              : ""
+              }`}
             onClick={() =>
               selecionarCategoria(categoria.slug)
             }
@@ -210,31 +268,30 @@ export default function ServicosPage() {
             <h2>
               {carregando
                 ? "Buscando..."
-                : `${servicos.length} ${
-                    servicos.length === 1
-                      ? "serviço encontrado"
-                      : "serviços encontrados"
-                  }`}
+                : `${servicos.length} ${servicos.length === 1
+                  ? "serviço encontrado"
+                  : "serviços encontrados"
+                }`}
             </h2>
           </div>
 
           {(categoriaSelecionada ||
             buscaAplicada) && (
-            <button
-              className="limpar-filtros"
-              onClick={() => {
-                setCategoriaSelecionada("");
-                setBusca("");
-                setBuscaAplicada("");
+              <button
+                className="limpar-filtros"
+                onClick={() => {
+                  setCategoriaSelecionada("");
+                  setBusca("");
+                  setBuscaAplicada("");
 
-                router.replace(
-                  "/cliente/servicos"
-                );
-              }}
-            >
-              Limpar filtros
-            </button>
-          )}
+                  router.replace(
+                    "/cliente/servicos"
+                  );
+                }}
+              >
+                Limpar filtros
+              </button>
+            )}
         </div>
 
         {/* CARREGANDO */}
@@ -305,15 +362,18 @@ export default function ServicosPage() {
           servicos.length > 0 && (
             <div className="servicos-grid">
               {servicos.map((servico) => (
+
                 <ServicoCard
                   key={servico.id}
                   servico={servico}
+                  favorito={favoritos.includes(servico.id)}
+                  favoritoPendente={favoritosPendentes.includes(servico.id)}
+                  onFavorito={() => alternarFavorito(servico.id)}
                   onClick={() =>
-                    router.push(
-                      `/cliente/servicos/${servico.id}`
-                    )
+                    router.push(`/cliente/servicos/${servico.id}`)
                   }
                 />
+
               ))}
             </div>
           )}
@@ -322,19 +382,26 @@ export default function ServicosPage() {
   );
 }
 
+
 function ServicoCard({
   servico,
   onClick,
+  favorito,
+  favoritoPendente,
+  onFavorito,
 }: {
   servico: Servico;
   onClick: () => void;
+  favorito: boolean;
+  favoritoPendente: boolean;
+  onFavorito: () => void;
 }) {
   const preco =
     servico.preco_inicial != null
       ? new Intl.NumberFormat("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        }).format(Number(servico.preco_inicial))
+        style: "currency",
+        currency: "BRL",
+      }).format(Number(servico.preco_inicial))
       : null;
 
   const localizacao = [
@@ -363,16 +430,34 @@ function ServicoCard({
           </span>
         )}
 
+
         <button
           type="button"
           className="servico-favorito-preview"
-          title="Favoritos serão ativados em seguida"
+          title={
+            favorito
+              ? "Remover dos favoritos"
+              : "Adicionar aos favoritos"
+          }
+          aria-label={
+            favorito
+              ? "Remover dos favoritos"
+              : "Adicionar aos favoritos"
+          }
+          aria-pressed={favorito}
+          disabled={favoritoPendente}
           onClick={(event) => {
             event.stopPropagation();
+            onFavorito();
+          }}
+          style={{
+            color: favorito ? "#e63946" : undefined,
+            opacity: favoritoPendente ? 0.5 : 1,
           }}
         >
-          ☆
+          {favorito ? "★" : "☆"}
         </button>
+
       </div>
 
       <div className="servico-card-conteudo">
