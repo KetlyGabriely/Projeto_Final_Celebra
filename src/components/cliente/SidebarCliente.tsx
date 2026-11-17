@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { logoutUsuario } from "@/controllers/authController";
 
 export default function SidebarCliente() {
   const router = useRouter();
@@ -13,6 +12,7 @@ export default function SidebarCliente() {
     { nome: "Meus eventos", rota: "/cliente/eventos", icone: "♡" },
     { nome: "Orçamentos", rota: "/cliente/orcamentos", icone: "▤" },
     { nome: "Favoritos", rota: "/cliente/favoritos", icone: "☆" },
+    { nome: "Feed Celebra", rota: "/feed", icone: "◉" },
     { nome: "Meu perfil", rota: "/cliente/perfil", icone: "○" },
     {
       nome: "Configurações",
@@ -27,16 +27,6 @@ export default function SidebarCliente() {
     }
 
     return pathname.startsWith(rota);
-  }
-
-  async function sair() {
-    try {
-      await logoutUsuario();
-      router.push("/login");
-      router.refresh();
-    } catch (error) {
-      console.error("Erro ao sair:", error);
-    }
   }
 
   return (
@@ -57,8 +47,9 @@ export default function SidebarCliente() {
         {itens.map((item) => (
           <button
             key={item.rota}
-            className={`sidebar-item ${estaAtivo(item.rota) ? "ativo" : ""
-              }`}
+            className={`sidebar-item ${
+              estaAtivo(item.rota) ? "ativo" : ""
+            }`}
             onClick={() => router.push(item.rota)}
           >
             <span className="sidebar-icone">
@@ -79,14 +70,6 @@ export default function SidebarCliente() {
             <p>Estamos aqui para você.</p>
           </div>
         </div>
-
-        <button
-          className="sidebar-sair"
-          onClick={sair}
-        >
-          <span>↪</span>
-          Sair da conta
-        </button>
       </div>
     </aside>
   );
